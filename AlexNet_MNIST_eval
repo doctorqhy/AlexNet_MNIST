@@ -1,0 +1,29 @@
+import tensorflow as tf
+import AlexNet_MNIST_inference
+import AlexNet_MNIST_train
+import numpy
+
+
+def classify(mnist):
+
+    with tf.Graph().as_default() as g:
+
+        x = tf.placeholder(tf.float32,[-1,
+                                       AlexNet_MNIST_inference.image_size,
+                                       AlexNet_MNIST_inference.image_size,
+                                       AlexNet_MNIST_inference.num_channels])
+
+        prediction = AlexNet_MNIST_inference.inference(x,None,None)
+        classi = tf.argmax(prediction,1)
+
+        variables_averages = tf.train.ExponentialMovingAverage(AlexNet_MNIST_train.moving_avreage_decay)
+        variables_to_restore = variables_averages.variables_to_restore()
+        saver = tf.train.Saver(variables_to_restore)
+
+        with tf.Session() as sess:
+
+            saver.restore(sess,'model/model.ckpt-0')
+            xs = mnist.test.images[1]
+            reshaped_xs = numpy.reshape(xs,[1,28,28,1])
+            cls = sess.run(classi,feed_dict={x:reshaped_xs})
+            print('classify is %s'%cls)
