@@ -1,0 +1,87 @@
+import tensorflow as tf
+from tensorflow.examples.tutorials.mnist import input_data
+from numpy import *
+import AlexNet_MNIST_inference
+import os
+
+
+batch_size = 128
+learning_rate_base = 0.8
+learning_rate_decy = 0.99
+regularaztion_rate = 0.0001
+moving_avreage_decay = 0.99
+
+model_save_path = 'model'
+model_name = 'model.ckpt'
+
+
+def train(mnist):
+
+    x = tf.placeholder(tf.float32,[batch_size,
+                                   AlexNet_MNIST_inference.image_size,
+                                   AlexNet_MNIST_inference.image_size,
+                                   AlexNet_MNIST_inference.num_channels])
+    y_ = tf.placeholder(tf.float32,[None,AlexNet_MNIST_inference.num_labels])
+
+    regularizer = tf.contrib.layers.l2_regularizer(regularaztion_rate)
+
+    #得到预测值
+    y = AlexNet_MNIST_inference.inference(x,train,regularizer)
+
+    step = tf.Variable(0,trainable=False)
+
+    #定义滑动平均模型
+    variable_averages = tf.train.ExponentialMovingAverage(moving_avreage_decay,step)
+    variable_averages_op = variable_averages.apply(tf.trainable_variables())
+
+    #交叉熵损失函数
+    cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=y,labels=y_)
+    cross_entropy_mean = tf.reduce_mean(cross_entropy)
+
+    #定义总的损失
+    loss = cross_entropy_mean + tf.add_n(tf.get_collection('loss'))
+
+    #定义学习率
+    learning_rate = tf.train.exponential_decay(learning_rate_base,
+                                               step,
+                                               mnist.train.num_examples//batch_size,
+                                               learning_rate_decy)
+
+    #定义优化器
+    train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss)
+
+    train_op = tf.group(train_step,variable_averages_op)
+
+
+    saver = tf.train.Saver()
+
+    with tf.Session() as sess:
+
+        tf.global_variables_initializer().run()
+
+        for i in range(50000):
+
+
+            xs_train,ys_train = mnist.train.next_batch(batch_size)
+            reshaped_xs_train = reshape(xs_train,[batch_size,
+                                                  AlexNet_MNIST_inference.image_size,
+                                                  AlexNet_MNIST_inference.image_size,
+                                                  AlexNet_MNIST_inference.num_channels])
+            _,loss_value,global_step = sess.run([train_op,loss,step],feed_dict={x:reshaped_xs_train,y_:ys_train})
+
+            if i % 1000 == 0:
+
+                print('after %d training steps,the loss on training batch is %g'%(i,loss_value))
+                #保存训练数据
+                saver.save(sess,os.path.join(model_save_path,model_name),global_step=global_step)
+
+
+def main():
+
+    mnist = input_data.read_data_sets('MNIST_data',one_hot=True)
+    train(mnist)
+
+
+if __name__ == '__main__':
+
+    main()
